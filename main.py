@@ -11,9 +11,16 @@ config = DEFAULT_CONFIG.copy()
 # Initialize with custom config
 ta = TradingAgentsGraph(debug=True, config=config)
 
-# forward propagate
+# forward propagate (stock)
 _, decision = ta.propagate("NVDA", "2024-05-10")
 print(decision)
+
+# Crypto works the same way, but pass asset_type="crypto" explicitly — unlike
+# the CLI, this constructor was not built with asset-type-filtered analysts,
+# so a crypto run still includes the fundamentals analyst unless you build
+# `selected_analysts` yourself without "fundamentals" for that call.
+# _, decision = ta.propagate("BTC-USD", "2024-05-10", asset_type="crypto")
+# print(decision)
 
 # Memorize mistakes and reflect
 # ta.reflect_and_remember(1000) # parameter is the position returns

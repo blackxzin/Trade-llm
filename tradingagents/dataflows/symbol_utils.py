@@ -67,6 +67,15 @@ _ALIASES = {
     "GER40": "^GDAXI", "GER30": "^GDAXI", "DE40": "^GDAXI",
     "UK100": "^FTSE", "JP225": "^N225", "JPN225": "^N225",
     "FRA40": "^FCHI", "EU50": "^STOXX50E", "HK50": "^HSI",
+    # Bare crypto base symbols (no quote currency typed). Several of these
+    # collide with real, unrelated Yahoo tickers — BTC/ETH/XRP are Grayscale
+    # spot ETFs (~$10-30/share), LTC/BCH/LINK are ordinary NYSE/NASDAQ equities
+    # with no connection to the coin — so left unmapped, a user typing the
+    # obvious short name for the coin would silently get analysis of the wrong
+    # instrument. Same tradeoff already accepted for GOLD/SILVER above.
+    "BTC": "BTC-USD", "XBT": "BTC-USD", "ETH": "ETH-USD", "SOL": "SOL-USD",
+    "XRP": "XRP-USD", "ADA": "ADA-USD", "DOGE": "DOGE-USD", "LTC": "LTC-USD",
+    "BCH": "BCH-USD", "DOT": "DOT-USD", "AVAX": "AVAX-USD", "LINK": "LINK-USD",
 }
 
 # Yahoo symbols may contain letters, digits, and these structural characters.

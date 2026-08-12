@@ -7,7 +7,7 @@ behavior we added for the Trader, Research Manager, and Sentiment Analyst
 so they share the same deterministic output shape.
 """
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 from pydantic import ValidationError
@@ -406,3 +406,30 @@ class TestSentimentAnalystAgent:
         llm.with_structured_output.return_value = structured
         llm.invoke.return_value = MagicMock(content=plain)
         assert create_sentiment_analyst(llm)(_make_sentiment_state())["sentiment_report"] == plain
+
+    def test_crypto_run_includes_fear_greed_and_funding_blocks(self):
+        captured = {}
+        state = {**_make_sentiment_state(), "company_of_interest": "BTC-USD", "asset_type": "crypto"}
+        with (
+            patch(
+                "tradingagents.agents.analysts.sentiment_analyst.fetch_fear_greed_index",
+                return_value="2026-06-15: 72/100 (Greed)",
+            ),
+            patch(
+                "tradingagents.agents.analysts.sentiment_analyst.fetch_funding_and_open_interest",
+                return_value="Binance perpetual futures (BTCUSDT): ...",
+            ),
+        ):
+            create_sentiment_analyst(_structured_sentiment_llm(captured))(state)
+        prompt_text = "\n".join(str(m) for m in captured["prompt"])
+        assert "Fear & Greed Index" in prompt_text
+        assert "72/100 (Greed)" in prompt_text
+        assert "Funding rate & open interest" in prompt_text
+        assert "BTCUSDT" in prompt_text
+
+    def test_stock_run_excludes_crypto_blocks(self):
+        captured = {}
+        create_sentiment_analyst(_structured_sentiment_llm(captured))(_make_sentiment_state())
+        prompt_text = "\n".join(str(m) for m in captured["prompt"])
+        assert "Fear & Greed Index" not in prompt_text
+        assert "Funding rate & open interest" not in prompt_text

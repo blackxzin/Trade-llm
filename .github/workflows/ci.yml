@@ -27,7 +27,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
       - name: Run test suite
-        run: pytest -q
+        run: pytest -q --cov=tradingagents --cov=cli --cov-report=term-missing
 
   smoke-install:
     name: clean-install smoke

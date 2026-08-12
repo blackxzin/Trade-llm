@@ -17,6 +17,7 @@ from tradingagents.agents.utils.fundamental_data_tools import (
 from tradingagents.agents.utils.macro_data_tools import get_macro_indicators
 from tradingagents.agents.utils.market_data_validation_tools import get_verified_market_snapshot
 from tradingagents.agents.utils.news_data_tools import (
+    get_crypto_news,
     get_global_news,
     get_insider_transactions,
     get_news,
@@ -35,6 +36,7 @@ __all__ = [
     "get_income_statement",
     "get_news",
     "get_global_news",
+    "get_crypto_news",
     "get_insider_transactions",
     "get_macro_indicators",
     "get_prediction_markets",
@@ -164,7 +166,10 @@ def build_instrument_context(
     if is_crypto:
         context += (
             " Treat it as a crypto asset rather than a company, and do not "
-            "assume company fundamentals are available."
+            "assume company fundamentals are available. It trades continuously "
+            "(24/7, no weekend or holiday close), so do not read a weekend gap "
+            "as a news-driven move, and size risk for materially higher "
+            "volatility than large-cap equities."
         )
     return context
 

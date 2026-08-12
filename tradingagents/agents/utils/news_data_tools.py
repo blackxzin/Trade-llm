@@ -2,6 +2,7 @@ from typing import Annotated
 
 from langchain_core.tools import tool
 
+from tradingagents.dataflows.crypto_news import fetch_crypto_news
 from tradingagents.dataflows.interface import route_to_vendor
 
 
@@ -44,6 +45,27 @@ def get_global_news(
         str: A formatted string containing global news data
     """
     return route_to_vendor("get_global_news", curr_date, look_back_days, limit)
+
+@tool
+def get_crypto_news(
+    ticker: Annotated[str, "Crypto ticker symbol, e.g. BTC-USD"],
+    start_date: Annotated[str, "Start date in yyyy-mm-dd format"],
+    end_date: Annotated[str, "End date in yyyy-mm-dd format"],
+) -> str:
+    """
+    Retrieve crypto-native news (CoinDesk + CoinTelegraph) for a given ticker's
+    base asset over a date window. Covers protocol upgrades, ETF flows,
+    exchange incidents, and regulatory action that general finance news feeds
+    (get_news) often miss. Crypto assets only — not routed through the
+    configured news_data vendor, since neither feed applies to equities.
+    Args:
+        ticker (str): Crypto ticker symbol, e.g. BTC-USD
+        start_date (str): Start date in yyyy-mm-dd format
+        end_date (str): End date in yyyy-mm-dd format
+    Returns:
+        str: A formatted string of matching crypto news articles
+    """
+    return fetch_crypto_news(ticker, start_date, end_date)
 
 @tool
 def get_insider_transactions(

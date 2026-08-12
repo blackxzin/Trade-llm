@@ -10,6 +10,13 @@ class CryptoAssetModeTests(unittest.TestCase):
         self.assertEqual(detect_asset_type("BTC-USD"), AssetType.CRYPTO)
         self.assertEqual(detect_asset_type("eth-usd"), AssetType.CRYPTO)
 
+    def test_detects_bare_crypto_symbols(self):
+        # "BTC" typed bare is the obvious thing a user reaches for; it must
+        # not fall through to the unrelated Grayscale ETF ticker of the same
+        # name and get classified as a stock (#symbol_utils bare-crypto fix).
+        self.assertEqual(detect_asset_type("BTC"), AssetType.CRYPTO)
+        self.assertEqual(detect_asset_type("btc"), AssetType.CRYPTO)
+
     def test_defaults_non_crypto_symbols_to_stock(self):
         self.assertEqual(detect_asset_type("AAPL"), AssetType.STOCK)
         self.assertEqual(detect_asset_type("SPY"), AssetType.STOCK)

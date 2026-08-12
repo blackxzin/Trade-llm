@@ -13,6 +13,12 @@ the LLM is invoked and injects them into the prompt as structured blocks:
                            user-labeled Bullish/Bearish sentiment tags
   3. Reddit posts        — r/wallstreetbets, r/stocks, r/investing
 
+For a crypto run (``asset_type == "crypto"``), two more crypto-only sources
+are added — no equity analogue exists for either:
+
+  4. Fear & Greed Index  — alternative.me daily crypto sentiment gauge
+  5. Funding rate / OI   — Binance perpetual futures leverage/positioning
+
 The agent does not use tool-calling; the data is in the prompt from
 turn 0. Output uses the structured-output pattern (json_schema for
 OpenAI/xAI, response_schema for Gemini, tool-use for Anthropic), falling
@@ -40,6 +46,8 @@ from tradingagents.agents.utils.structured import (
     bind_structured,
     invoke_structured_or_freetext,
 )
+from tradingagents.dataflows.crypto_derivatives import fetch_funding_and_open_interest
+from tradingagents.dataflows.fear_greed import fetch_fear_greed_index
 from tradingagents.dataflows.reddit import fetch_reddit_posts
 from tradingagents.dataflows.stocktwits import fetch_stocktwits_messages
 
@@ -63,13 +71,18 @@ def create_sentiment_analyst(llm):
         end_date = state["trade_date"]
         start_date = _seven_days_back(end_date)
         instrument_context = get_instrument_context_from_state(state)
+        is_crypto = state.get("asset_type", "stock") == "crypto"
 
-        # Pre-fetch all three sources. Each fetcher degrades gracefully and
-        # returns a string (no exceptions surface from here), so the LLM
-        # always sees something — either real data or a clear placeholder.
+        # Pre-fetch all sources. Each fetcher degrades gracefully and returns
+        # a string (no exceptions surface from here), so the LLM always sees
+        # something — either real data or a clear placeholder. Fear & Greed
+        # and funding/open-interest are crypto-only: no equity analogue, and
+        # fetching them for a stock ticker would only return a placeholder.
         news_block = get_news.func(ticker, start_date, end_date)
         stocktwits_block = fetch_stocktwits_messages(ticker, limit=30)
         reddit_block = fetch_reddit_posts(ticker)
+        fear_greed_block = fetch_fear_greed_index() if is_crypto else None
+        funding_oi_block = fetch_funding_and_open_interest(ticker) if is_crypto else None
 
         system_message = _build_system_message(
             ticker=ticker,
@@ -78,6 +91,8 @@ def create_sentiment_analyst(llm):
             news_block=news_block,
             stocktwits_block=stocktwits_block,
             reddit_block=reddit_block,
+            fear_greed_block=fear_greed_block,
+            funding_oi_block=funding_oi_block,
         )
 
         prompt = ChatPromptTemplate.from_messages(
@@ -131,9 +146,40 @@ def _build_system_message(
     news_block: str,
     stocktwits_block: str,
     reddit_block: str,
+    fear_greed_block: str | None = None,
+    funding_oi_block: str | None = None,
 ) -> str:
-    """Assemble the sentiment-analyst system message with structured data blocks."""
-    return f"""You are a financial market sentiment analyst. Your task is to produce a comprehensive sentiment report for {ticker} covering the period from {start_date} to {end_date}, drawing on three complementary data sources that have already been collected for you.
+    """Assemble the sentiment-analyst system message with structured data blocks.
+
+    ``fear_greed_block``/``funding_oi_block`` are crypto-only (None for a
+    stock run) and, when present, are appended as extra sourced blocks with
+    their own reading guidance rather than folded into the three-source
+    framing below, which stays accurate for every run.
+    """
+    crypto_blocks = ""
+    crypto_guidance = ""
+    if fear_greed_block is not None:
+        crypto_blocks += f"""
+### Fear & Greed Index — alternative.me, recent daily readings
+Aggregate crypto market-sentiment gauge, 0 (extreme fear) to 100 (extreme greed). Slower-moving than StockTwits/Reddit; useful as a contrarian extremes signal.
+
+<start_of_fear_greed>
+{fear_greed_block}
+<end_of_fear_greed>
+"""
+        crypto_guidance += "\n9. **Read the Fear & Greed Index for extremes, not direction.** Sustained readings near 0 or 100 are historically contrarian (extreme fear = capitulation risk of a bounce; extreme greed = over-extension risk of a pullback), not confirmation to follow the crowd."
+    if funding_oi_block is not None:
+        crypto_blocks += f"""
+### Funding rate & open interest — Binance perpetual futures
+Leverage/positioning signal with no equity analogue. Positive funding = leveraged longs paying shorts to stay open (crowded-long lean, squeeze risk down); negative = the reverse. Open interest confirms whether new leveraged money is entering.
+
+<start_of_funding_oi>
+{funding_oi_block}
+<end_of_funding_oi>
+"""
+        crypto_guidance += "\n10. **Weigh funding rate as a positioning risk, not a directional signal.** A richly positive funding rate alongside a StockTwits/Reddit bullish extreme compounds squeeze risk even if the narrative is bullish; note this explicitly when it applies."
+
+    return f"""You are a financial market sentiment analyst. Your task is to produce a comprehensive sentiment report for {ticker} covering the period from {start_date} to {end_date}, drawing on complementary data sources that have already been collected for you.
 
 ## Data sources (pre-fetched, in this prompt)
 
@@ -157,7 +203,7 @@ Community discussion. Engagement signal via upvote score and comment count. Subr
 <start_of_reddit>
 {reddit_block}
 <end_of_reddit>
-
+{crypto_blocks}
 ## How to analyze this data (best practices)
 
 1. **Read the StockTwits Bullish/Bearish ratio as a leading retail-sentiment signal.** A 70/30 bullish/bearish split is moderately bullish; ≥90/10 may indicate over-extension and contrarian risk; 50/50 is uncertainty. Sample size matters — base rates on the actual message count, not percentages alone.
@@ -175,7 +221,7 @@ Community discussion. Engagement signal via upvote score and comment count. Subr
 7. **Identify catalysts and risks** that emerge across sources — news of upcoming earnings, product launches, competitive threats, macro headlines, etc.
 
 8. **Past sentiment is not predictive.** Frame your conclusions as signal for the trader to weigh alongside fundamentals and technicals, not as a price call.
-
+{crypto_guidance}
 ## Output fields
 
 Fill the following fields:

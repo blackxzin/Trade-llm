@@ -8,6 +8,8 @@ call is needed — and SignalProcessor is now a thin adapter that delegates
 to it.
 """
 
+import inspect
+
 import pytest
 
 from tradingagents.agents.utils.rating import RATINGS_5_TIER, parse_rating
@@ -73,16 +75,14 @@ class TestSignalProcessor:
         md = "**Rating**: Overweight\n\n**Executive Summary**: Build gradually."
         assert sp.process_signal(md) == "Overweight"
 
-    def test_makes_no_llm_calls(self):
-        """SignalProcessor must not invoke the LLM it was constructed with —
-        the rating is parseable from the rendered PM markdown directly."""
-        from unittest.mock import MagicMock
-
-        llm = MagicMock()
-        sp = SignalProcessor(llm)
-        sp.process_signal("Rating: Buy\nDetails.")
-        llm.invoke.assert_not_called()
-        llm.with_structured_output.assert_not_called()
+    def test_takes_no_llm(self):
+        """SignalProcessor has no __init__ of its own — the rating is parseable
+        from the rendered PM markdown directly, with no LLM to construct or
+        invoke. process_signal takes only the signal text."""
+        assert "__init__" not in SignalProcessor.__dict__
+        ps_params = inspect.signature(SignalProcessor.process_signal).parameters
+        assert list(ps_params) == ["self", "full_signal"]
+        assert "quick_thinking_llm" not in ps_params
 
     def test_default_when_no_rating_present(self):
         sp = SignalProcessor()

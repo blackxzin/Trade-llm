@@ -44,6 +44,16 @@ class TestNormalizeSymbol(unittest.TestCase):
         self.assertEqual(normalize_symbol("BTCUSD"), "BTC-USD")
         self.assertEqual(normalize_symbol("ETHUSD"), "ETH-USD")
 
+    def test_bare_crypto_symbol_resolves_to_usd_pair(self):
+        # Typed bare (no quote currency), these collide with real, unrelated
+        # Yahoo tickers (BTC/ETH/XRP are Grayscale ETFs; LTC/BCH/LINK are
+        # ordinary equities) so must be explicitly mapped, like GOLD/SILVER.
+        self.assertEqual(normalize_symbol("BTC"), "BTC-USD")
+        self.assertEqual(normalize_symbol("btc"), "BTC-USD")
+        self.assertEqual(normalize_symbol("XBT"), "BTC-USD")
+        self.assertEqual(normalize_symbol("ETH"), "ETH-USD")
+        self.assertEqual(normalize_symbol("LINK"), "LINK-USD")
+
     def test_six_letter_non_currency_left_alone(self):
         # GOOGLE-style 6-letter tickers that aren't two currency codes
         # must not be mangled into a fake forex pair.

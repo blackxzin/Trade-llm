@@ -63,8 +63,8 @@ Our framework decomposes complex trading tasks into specialized roles.
 
 ### Analyst Team
 - Fundamentals Analyst: Evaluates company financials and performance metrics, identifying intrinsic values and potential red flags.
-- Sentiment Analyst: Aggregates news headlines, StockTwits, and Reddit chatter into a single sentiment read to gauge short-term market mood.
-- News Analyst: Monitors global news and macroeconomic indicators, interpreting the impact of events on market conditions.
+- Sentiment Analyst: Aggregates news headlines, StockTwits, and Reddit chatter into a single sentiment read to gauge short-term market mood. On a crypto run, also pulls the Fear & Greed Index and Binance funding rate / open interest — leverage and positioning signals with no equity analogue.
+- News Analyst: Monitors global news and macroeconomic indicators, interpreting the impact of events on market conditions. On a crypto run, adds CoinDesk/CoinTelegraph coverage for protocol, ETF, and regulatory events general finance feeds miss.
 - Technical Analyst: Utilizes technical indicators (like MACD and RSI) to detect trading patterns and forecast price movements.
 
 <p align="center">

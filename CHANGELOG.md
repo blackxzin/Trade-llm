@@ -6,6 +6,45 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Breaking changes within the 0.x line are called out explicitly.
 
+## [Unreleased]
+
+### Added
+
+- **Crypto-specific market data for the Sentiment and News analysts.** A
+  crypto run (`asset_type == "crypto"`) now also pulls: the Fear & Greed
+  Index (alternative.me), Binance perpetual funding rate & open interest —
+  leverage/positioning signals with no equity analogue — and CoinDesk /
+  CoinTelegraph news, which cover protocol, ETF, and regulatory events the
+  configured (equity-oriented) news vendors often miss. All three are free,
+  keyless public APIs and degrade to a placeholder string rather than fail
+  the run if unreachable. Stock runs are unaffected.
+
+### Fixed
+
+- **Bare crypto ticker symbols (`BTC`, `ETH`, `LTC`, `BCH`, `LINK`, ...) now
+  resolve to their `-USD` pair.** Left unmapped, several of these collide with
+  real, unrelated Yahoo tickers — `BTC`/`ETH`/`XRP` are Grayscale spot ETFs
+  (~$10-30/share), `LTC`/`BCH`/`LINK` are ordinary NYSE/NASDAQ equities — so a
+  user typing the obvious short name for the coin silently got analysis of the
+  wrong instrument, and it wasn't detected as crypto (fundamentals analyst ran
+  against it). Same tradeoff already accepted for `GOLD`/`SILVER`.
+
+### Changed
+
+- **Crypto instrument context now flags 24/7 trading and volatility.** Trader
+  and risk-management prompts previously only knew "no fundamentals available"
+  for a crypto asset; they now know it trades continuously (no weekend/holiday
+  gap to misread as news-driven) and should be sized for materially higher
+  volatility than large-cap equities.
+- **`SignalProcessor` no longer accepts/stores an LLM.** It never called one —
+  the rating is parsed straight from the Portfolio Manager's rendered
+  markdown — so the constructor argument was dead weight.
+- CI now reports test coverage (`pytest --cov`) instead of pass/fail only.
+
+### Removed
+
+- Unused `backtrader` and `redis` dependencies from `pyproject.toml`.
+
 ## [0.3.1] — 2026-07-05
 
 Correctness and stability patch: data look-ahead, graph-router crash-safety,
