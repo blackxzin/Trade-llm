@@ -2,7 +2,7 @@ name: BTC live analysis
 
 on:
   schedule:
-    - cron: "0 */4 * * *"
+    - cron: "0 */8 * * *"
   workflow_dispatch:
     inputs:
       force_notify:
@@ -45,7 +45,7 @@ jobs:
           GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: >
-          python scripts/run_btc_analysis.py --votes 1
+          python scripts/run_btc_analysis.py --votes 3
           --state-file .state/btc_notify_state.json
           ${{ inputs.force_notify && '--force-notify' || '' }}
       - name: Save notify-state cache
