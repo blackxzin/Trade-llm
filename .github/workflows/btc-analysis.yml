@@ -44,6 +44,7 @@ jobs:
           TRADINGAGENTS_QUICK_THINK_LLM: meta/llama-3.3-70b-instruct
           NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
           NVIDIA_API_KEY_2: ${{ secrets.NVIDIA_API_KEY_2 }}
+          NVIDIA_API_KEY_3: ${{ secrets.NVIDIA_API_KEY_3 }}
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: >
           python scripts/run_btc_analysis.py --votes 3
