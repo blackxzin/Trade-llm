@@ -4,6 +4,11 @@ on:
   schedule:
     - cron: "0 */4 * * *"
   workflow_dispatch:
+    inputs:
+      force_notify:
+        description: "Post to Discord even if the decision is unchanged"
+        type: boolean
+        default: false
 
 concurrency:
   group: btc-analysis
@@ -39,7 +44,10 @@ jobs:
           TRADINGAGENTS_QUICK_THINK_LLM: gemini-3.1-flash-lite
           GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-        run: python scripts/run_btc_analysis.py --votes 3 --state-file .state/btc_notify_state.json
+        run: >
+          python scripts/run_btc_analysis.py --votes 3
+          --state-file .state/btc_notify_state.json
+          ${{ inputs.force_notify && '--force-notify' || '' }}
       - name: Save notify-state cache
         if: always()
         uses: actions/cache/save@v4

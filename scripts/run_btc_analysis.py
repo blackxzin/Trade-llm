@@ -128,12 +128,15 @@ def main() -> int:
                 summary = f"Consensus: {consensus_count}/{args.votes} votes\n\n{summary}"
                 if low_confidence:
                     title = f"⚠ LOW CONFIDENCE — {title}"
-            notify_discord_embed(title=title, description=summary, rating=decision)
-            notify_state[args.ticker] = {
-                "decision": decision, "date": date,
-                "last_notified": datetime.now().isoformat(timespec="seconds"),
-            }
-            _save_notify_state(state_path, notify_state)
+            posted = notify_discord_embed(title=title, description=summary, rating=decision)
+            if posted:
+                notify_state[args.ticker] = {
+                    "decision": decision, "date": date,
+                    "last_notified": datetime.now().isoformat(timespec="seconds"),
+                }
+                _save_notify_state(state_path, notify_state)
+            else:
+                print("Discord post failed — not recording as notified, will retry next run.")
         else:
             print(f"\nSkipped Discord notification: decision unchanged ({decision}); use --force-notify to override.")
 
