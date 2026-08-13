@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from datetime import datetime
 from pathlib import Path
 
@@ -28,6 +29,27 @@ from tradingagents.default_config import DEFAULT_CONFIG
 from tradingagents.discord_notify import bias_tag, notify_discord_embed
 from tradingagents.env_check import require_llm_api_key, warn_if_no_discord_webhook
 from tradingagents.graph.trading_graph import TradingAgentsGraph
+from tradingagents.llm_clients.api_key_env import get_api_key_env
+
+_QUOTA_ERROR_MARKERS = ("resource_exhausted", "rate_limit", "429", "quota")
+
+
+def _is_quota_error(exc: Exception) -> bool:
+    text = str(exc).lower()
+    return any(marker in text for marker in _QUOTA_ERROR_MARKERS)
+
+
+def _available_api_keys(env_var: str) -> list[str]:
+    """API keys set for one provider: ``env_var``, ``env_var_2``, ``env_var_3``, ... in order."""
+    keys = []
+    base = os.environ.get(env_var)
+    if base:
+        keys.append(base)
+    i = 2
+    while (extra := os.environ.get(f"{env_var}_{i}")):
+        keys.append(extra)
+        i += 1
+    return keys
 
 
 def _load_notify_state(path: Path) -> dict:
@@ -79,14 +101,31 @@ def main() -> int:
     require_llm_api_key(config["llm_provider"])
     warn_if_no_discord_webhook(args.no_discord)
 
-    ta = TradingAgentsGraph(
-        debug=False, config=config,
-        selected_analysts=("market", "social", "news"),
-    )
+    api_key_env = get_api_key_env(config["llm_provider"])
+    api_keys = _available_api_keys(api_key_env) if api_key_env else []
+
+    def _build_graph() -> TradingAgentsGraph:
+        return TradingAgentsGraph(
+            debug=False, config=config,
+            selected_analysts=("market", "social", "news"),
+        )
+
+    ta = _build_graph()
 
     states, decisions = [], []
+    key_index = 0
     for i in range(args.votes):
-        state, decision = ta.propagate(args.ticker, date, asset_type="crypto")
+        while True:
+            try:
+                state, decision = ta.propagate(args.ticker, date, asset_type="crypto")
+                break
+            except Exception as exc:
+                if not _is_quota_error(exc) or key_index + 1 >= len(api_keys):
+                    raise
+                key_index += 1
+                print(f"{api_key_env} exhausted, switching to key {key_index + 1}/{len(api_keys)}: {exc}")
+                os.environ[api_key_env] = api_keys[key_index]
+                ta = _build_graph()
         states.append(state)
         decisions.append(decision)
         if args.votes > 1:
