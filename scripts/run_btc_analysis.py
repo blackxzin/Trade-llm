@@ -21,22 +21,34 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import time
 from datetime import datetime
 from pathlib import Path
 
 from tradingagents.agents.utils.rating import majority_rating
 from tradingagents.default_config import DEFAULT_CONFIG
-from tradingagents.discord_notify import bias_tag, notify_discord_embed
+from tradingagents.discord_notify import bias_tag, notify_discord, notify_discord_embed
 from tradingagents.env_check import require_llm_api_key, warn_if_no_discord_webhook
 from tradingagents.graph.trading_graph import TradingAgentsGraph
 from tradingagents.llm_clients.api_key_env import get_api_key_env
 
 _QUOTA_ERROR_MARKERS = ("resource_exhausted", "rate_limit", "429", "quota", "504", "gateway timeout")
 
+# Transient provider-side hiccups (server overload) that usually clear up if
+# retried on the same key after a short wait, unlike a hard quota cap.
+_TRANSIENT_ERROR_MARKERS = ("503", "unavailable", "high demand", "internal server error")
+_MAX_TRANSIENT_RETRIES = 3
+_TRANSIENT_RETRY_BACKOFF_SECONDS = 15.0
+
 
 def _is_quota_error(exc: Exception) -> bool:
     text = str(exc).lower()
     return any(marker in text for marker in _QUOTA_ERROR_MARKERS)
+
+
+def _is_transient_error(exc: Exception) -> bool:
+    text = str(exc).lower()
+    return any(marker in text for marker in _TRANSIENT_ERROR_MARKERS)
 
 
 def _available_api_keys(env_var: str) -> list[str]:
@@ -92,6 +104,15 @@ def main() -> int:
     if args.votes < 1:
         parser.error("--votes must be >= 1")
 
+    try:
+        return _run(args)
+    except Exception as exc:
+        if not args.no_discord:
+            notify_discord(f"⚠️ BTC live analysis failed for {args.ticker}: {exc}")
+        raise
+
+
+def _run(args: argparse.Namespace) -> int:
     date = args.date or datetime.now().strftime("%Y-%m-%d")
 
     config = DEFAULT_CONFIG.copy()
@@ -115,17 +136,26 @@ def main() -> int:
     states, decisions = [], []
     key_index = 0
     for i in range(args.votes):
+        transient_attempt = 0
         while True:
             try:
                 state, decision = ta.propagate(args.ticker, date, asset_type="crypto")
                 break
             except Exception as exc:
-                if not _is_quota_error(exc) or key_index + 1 >= len(api_keys):
-                    raise
-                key_index += 1
-                print(f"{api_key_env} exhausted, switching to key {key_index + 1}/{len(api_keys)}: {exc}")
-                os.environ[api_key_env] = api_keys[key_index]
-                ta = _build_graph()
+                if _is_quota_error(exc) and key_index + 1 < len(api_keys):
+                    key_index += 1
+                    print(f"{api_key_env} exhausted, switching to key {key_index + 1}/{len(api_keys)}: {exc}")
+                    os.environ[api_key_env] = api_keys[key_index]
+                    ta = _build_graph()
+                    transient_attempt = 0
+                    continue
+                if _is_transient_error(exc) and transient_attempt < _MAX_TRANSIENT_RETRIES:
+                    transient_attempt += 1
+                    wait = _TRANSIENT_RETRY_BACKOFF_SECONDS * transient_attempt
+                    print(f"Transient error, retry {transient_attempt}/{_MAX_TRANSIENT_RETRIES} in {wait:.0f}s: {exc}")
+                    time.sleep(wait)
+                    continue
+                raise
         states.append(state)
         decisions.append(decision)
         if args.votes > 1:

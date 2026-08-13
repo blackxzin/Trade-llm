@@ -31,6 +31,27 @@ class TestIsQuotaError:
 
 
 @pytest.mark.unit
+class TestIsTransientError:
+    @pytest.mark.parametrize(
+        "message",
+        [
+            "503 UNAVAILABLE: This model is currently experiencing high demand",
+            "openai.InternalServerError: Error code: 500 - Internal Server Error",
+        ],
+    )
+    def test_recognizes_transient_errors(self, message):
+        assert run_btc_analysis._is_transient_error(Exception(message))
+
+    def test_ignores_unrelated_errors(self):
+        assert not run_btc_analysis._is_transient_error(Exception("invalid API key"))
+
+    def test_does_not_overlap_with_quota_errors(self):
+        quota_exc = Exception("429 RESOURCE_EXHAUSTED: quota exceeded")
+        assert run_btc_analysis._is_quota_error(quota_exc)
+        assert not run_btc_analysis._is_transient_error(quota_exc)
+
+
+@pytest.mark.unit
 class TestAvailableApiKeys:
     def test_collects_numbered_fallback_keys_in_order(self, monkeypatch):
         monkeypatch.setenv("NVIDIA_API_KEY", "k1")
