@@ -16,7 +16,7 @@ import argparse
 from datetime import datetime
 
 from tradingagents.default_config import DEFAULT_CONFIG
-from tradingagents.discord_notify import notify_discord
+from tradingagents.discord_notify import bias_tag, notify_discord_embed
 from tradingagents.graph.trading_graph import TradingAgentsGraph
 
 
@@ -51,7 +51,11 @@ def main() -> int:
 
     if not args.no_discord:
         summary = state.get("final_trade_decision", "") or decision
-        notify_discord(f"**{args.ticker}** on {date}: **{decision}**\n\n{summary}")
+        notify_discord_embed(
+            title=f"{args.ticker} — {date}: {decision} ({bias_tag(decision)})",
+            description=summary,
+            rating=decision,
+        )
 
     return 0
 

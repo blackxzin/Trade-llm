@@ -24,13 +24,15 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import json
 from datetime import datetime, timedelta
+from pathlib import Path
 
 import yfinance as yf
 
 from tradingagents.dataflows.symbol_utils import normalize_symbol
 from tradingagents.default_config import DEFAULT_CONFIG
-from tradingagents.discord_notify import notify_discord
+from tradingagents.discord_notify import bias_tag, notify_discord, notify_discord_embed
 from tradingagents.graph.trading_graph import TradingAgentsGraph
 
 # Directional lean per rating: +1 fully long ... -1 fully short. Used both to
@@ -46,6 +48,14 @@ def _test_dates(reference: datetime, count: int, horizon: int) -> list[datetime]
     price ``horizon`` days later, no later than ``reference`` itself."""
     last = reference - timedelta(days=horizon)
     return sorted(last - timedelta(days=i) for i in range(count))
+
+
+def _append_history(path: Path, record: dict) -> None:
+    """Append ``record`` as one JSON line, so successive backtest runs can be
+    compared over time without re-parsing console output."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(record) + "\n")
 
 
 def _close_prices(canonical: str, start: datetime, end: datetime) -> dict[str, float]:
@@ -69,6 +79,10 @@ def main() -> int:
     parser.add_argument("--horizon", type=int, default=3, help="days forward to measure return over")
     parser.add_argument("--provider", default=None, help="override TRADINGAGENTS_LLM_PROVIDER")
     parser.add_argument("--no-discord", action="store_true", help="skip the Discord notification")
+    parser.add_argument(
+        "--history-file", default=None,
+        help="JSONL file to append this run's summary to (default: <results_dir>/backtest_history.jsonl)",
+    )
     args = parser.parse_args()
 
     config = DEFAULT_CONFIG.copy()
@@ -106,12 +120,12 @@ def main() -> int:
             continue
 
         if c0 is None or c1 is None:
-            print(f"{date_str}: decision={decision:<12} (no price data to score)")
+            print(f"{date_str}: decision={decision:<12} {bias_tag(decision):<12} (no price data to score)")
             continue
 
         ret = (c1 - c0) / c0
         rows.append((date_str, decision, ret))
-        print(f"{date_str}: decision={decision:<12} {args.horizon}d fwd return={ret:+.2%}")
+        print(f"{date_str}: decision={decision:<12} {bias_tag(decision):<12} {args.horizon}d fwd return={ret:+.2%}")
 
     if not rows:
         print("\nNo scored days — nothing to summarize.")
@@ -139,14 +153,37 @@ def main() -> int:
         "not a validated edge. Re-run with more --days for a steadier read."
     )
 
+    history_path = Path(args.history_file) if args.history_file else Path(config["results_dir"]) / "backtest_history.jsonl"
+    _append_history(history_path, {
+        "timestamp": datetime.now().isoformat(timespec="seconds"),
+        "ticker": args.ticker,
+        "canonical": canonical,
+        "days": args.days,
+        "horizon": args.horizon,
+        "range_start": dates[0].strftime("%Y-%m-%d"),
+        "range_end": dates[-1].strftime("%Y-%m-%d"),
+        "days_scored": len(rows),
+        "directional_days": len(directional),
+        "hit_rate": hit_rate,
+        "strategy_return": strategy_return,
+        "buy_hold_return": buy_hold_return,
+    })
+    print(f"Appended summary to {history_path}")
+
     if not args.no_discord:
         hit_str = f"{hit_rate:.0%}" if hit_rate is not None else "n/a"
-        notify_discord(
-            f"**Backtest {args.ticker}** ({dates[0]:%Y-%m-%d} to {dates[-1]:%Y-%m-%d}, "
-            f"{args.horizon}d horizon)\n"
-            f"Days scored: {len(rows)} (directional: {len(directional)})\n"
-            f"Hit-rate: {hit_str} | Strategy return: {strategy_return:+.2%} | "
-            f"Buy-and-hold: {buy_hold_return:+.2%}"
+        # No single rating for an aggregate run — borrow the bias color scale
+        # by the sign of the strategy-weighted return (green/red/gray).
+        pseudo_rating = "Buy" if strategy_return > 0 else "Sell" if strategy_return < 0 else "Hold"
+        notify_discord_embed(
+            title=f"Backtest {args.ticker} — {dates[0]:%Y-%m-%d} to {dates[-1]:%Y-%m-%d} ({args.horizon}d horizon)",
+            description=(
+                f"Days scored: {len(rows)} (directional: {len(directional)})\n"
+                f"Hit-rate: {hit_str}\n"
+                f"Strategy return: {strategy_return:+.2%}\n"
+                f"Buy-and-hold: {buy_hold_return:+.2%}"
+            ),
+            rating=pseudo_rating,
         )
 
     return 0
