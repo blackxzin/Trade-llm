@@ -31,7 +31,7 @@ from tradingagents.env_check import require_llm_api_key, warn_if_no_discord_webh
 from tradingagents.graph.trading_graph import TradingAgentsGraph
 from tradingagents.llm_clients.api_key_env import get_api_key_env
 
-_QUOTA_ERROR_MARKERS = ("resource_exhausted", "rate_limit", "429", "quota")
+_QUOTA_ERROR_MARKERS = ("resource_exhausted", "rate_limit", "429", "quota", "504", "gateway timeout")
 
 
 def _is_quota_error(exc: Exception) -> bool:

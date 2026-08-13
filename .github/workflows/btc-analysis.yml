@@ -39,15 +39,13 @@ jobs:
             btc-notify-state-
       - name: Run BTC live analysis
         env:
-          TRADINGAGENTS_LLM_PROVIDER: nvidia
-          TRADINGAGENTS_DEEP_THINK_LLM: meta/llama-3.3-70b-instruct
-          TRADINGAGENTS_QUICK_THINK_LLM: meta/llama-3.3-70b-instruct
-          NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
-          NVIDIA_API_KEY_2: ${{ secrets.NVIDIA_API_KEY_2 }}
-          NVIDIA_API_KEY_3: ${{ secrets.NVIDIA_API_KEY_3 }}
+          TRADINGAGENTS_LLM_PROVIDER: google
+          TRADINGAGENTS_DEEP_THINK_LLM: gemini-3.5-flash
+          TRADINGAGENTS_QUICK_THINK_LLM: gemini-3.1-flash-lite
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: >
-          python scripts/run_btc_analysis.py --votes 3
+          python scripts/run_btc_analysis.py --votes 1
           --state-file .state/btc_notify_state.json
           ${{ inputs.force_notify && '--force-notify' || '' }}
       - name: Save notify-state cache
