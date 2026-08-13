@@ -12,11 +12,19 @@ Centralising it here avoids drift between those call sites.
 from __future__ import annotations
 
 import re
+from collections import Counter
 
 # Canonical, ordered 5-tier scale (most bullish to most bearish).
 RATINGS_5_TIER: tuple[str, ...] = (
     "Buy", "Overweight", "Hold", "Underweight", "Sell",
 )
+
+# Directional lean per rating: +1 fully long ... -1 fully short. Used to score
+# hit-rate direction, as a position weight for strategy returns, and to
+# tie-break majority votes across repeated runs of the same date.
+RATING_SCORE: dict[str, float] = {
+    "Buy": 1.0, "Overweight": 0.5, "Hold": 0.0, "Underweight": -0.5, "Sell": -1.0,
+}
 
 _RATING_SET = {r.lower() for r in RATINGS_5_TIER}
 
@@ -46,3 +54,24 @@ def parse_rating(text: str, default: str = "Hold") -> str:
                 return clean.capitalize()
 
     return default
+
+
+def majority_rating(ratings: list[str]) -> str:
+    """Return the most common rating in ``ratings``.
+
+    Ties are broken by averaging each tied rating's :data:`RATING_SCORE` over
+    the *full* vote list and picking the tied candidate closest to that
+    average — e.g. a Buy/Sell split resolves toward whichever tier the rest
+    of the votes lean toward, rather than an arbitrary pick.
+    """
+    if not ratings:
+        raise ValueError("ratings must not be empty")
+
+    counts = Counter(ratings)
+    top_count = max(counts.values())
+    tied = [r for r, c in counts.items() if c == top_count]
+    if len(tied) == 1:
+        return tied[0]
+
+    avg = sum(RATING_SCORE[r] for r in ratings) / len(ratings)
+    return min(tied, key=lambda r: abs(RATING_SCORE[r] - avg))

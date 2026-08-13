@@ -233,6 +233,36 @@ print(decision)
 
 See `tradingagents/default_config.py` for all configuration options.
 
+### BTC automation scripts
+
+`scripts/run_btc_analysis.py` and `scripts/backtest_btc.py` are thin, non-interactive wrappers around `TradingAgentsGraph` for unattended BTC-USD use (cron, `/schedule` routines, quick manual checks) — the interactive CLI prompts for ticker/analysts even when the provider is set via env, so it isn't suitable for automation on its own.
+
+```bash
+# One live decision for BTC-USD today
+python scripts/run_btc_analysis.py
+
+# Same, for another date/ticker/provider, saving the report tree to disk
+python scripts/run_btc_analysis.py --ticker ETH-USD --date 2026-08-12 --provider google --save-reports
+
+# Majority-vote ensemble: 3 independent passes over the same day, take the
+# consensus rating (reduces single-sample LLM noise; 3x the LLM calls).
+# A non-unanimous consensus is flagged "LOW CONFIDENCE" in the output/alert.
+python scripts/run_btc_analysis.py --votes 3
+
+# Small directional pilot backtest: 10 historical days, scored at 1d/3d/7d
+# forward horizons (one LLM pass per day, scored against every horizon),
+# net of a 10bps round-trip trading fee on directional days (--fee-bps 0 to disable)
+python scripts/backtest_btc.py --days 10 --horizons 1,3,7
+
+# Trend across successive backtest_btc.py runs: is hit-rate/strategy return
+# improving or declining over time?
+python scripts/analyze_backtest_history.py --ticker BTC-USD --last 10
+```
+
+Both scripts post their result to Discord when `DISCORD_WEBHOOK_URL` is set (see `.env.example`) — pass `--no-discord` to skip. Each `backtest_btc.py` run also appends its summary as one JSON line to `<results_dir>/backtest_history.jsonl` (default `~/.tradingagents/logs/backtest_history.jsonl`, override with `--history-file`), so successive runs can be compared over time via `scripts/analyze_backtest_history.py`.
+
+`run_btc_analysis.py` dedups its own Discord alerts: if the decision hasn't changed since the last notified run for that ticker, it skips posting again until `--heartbeat-hours` have passed (default 24h) — useful when running it every few hours via cron so an unchanged "Hold" doesn't spam the channel. Pass `--force-notify` to always post regardless.
+
 ## Persistence and Recovery
 
 TradingAgents persists two kinds of state across runs.

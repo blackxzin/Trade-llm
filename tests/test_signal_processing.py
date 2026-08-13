@@ -12,7 +12,7 @@ import inspect
 
 import pytest
 
-from tradingagents.agents.utils.rating import RATINGS_5_TIER, parse_rating
+from tradingagents.agents.utils.rating import RATINGS_5_TIER, majority_rating, parse_rating
 from tradingagents.graph.signal_processing import SignalProcessor
 
 # ---------------------------------------------------------------------------
@@ -61,6 +61,38 @@ class TestParseRating:
     def test_all_five_tiers_recognised(self):
         for r in RATINGS_5_TIER:
             assert parse_rating(f"Rating: {r}") == r
+
+
+# ---------------------------------------------------------------------------
+# Majority-vote ensemble
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestMajorityRating:
+    def test_single_vote_returns_itself(self):
+        assert majority_rating(["Buy"]) == "Buy"
+
+    def test_clear_majority_wins(self):
+        assert majority_rating(["Buy", "Buy", "Hold"]) == "Buy"
+
+    def test_unanimous_votes(self):
+        assert majority_rating(["Sell", "Sell", "Sell"]) == "Sell"
+
+    def test_two_way_tie_breaks_toward_the_extreme(self):
+        # Buy/Sell split: average score is 0, both tied candidates are
+        # equidistant, so the first-seen tied rating wins deterministically.
+        assert majority_rating(["Buy", "Sell"]) == "Buy"
+        assert majority_rating(["Sell", "Buy"]) == "Sell"
+
+    def test_tie_breaks_toward_the_third_votes_lean(self):
+        # Buy/Sell tied for the plurality, but the third Sell vote pulls the
+        # average score negative, so Sell (closer to that average) wins.
+        assert majority_rating(["Buy", "Sell", "Sell"]) == "Sell"
+
+    def test_empty_list_raises(self):
+        with pytest.raises(ValueError):
+            majority_rating([])
 
 
 # ---------------------------------------------------------------------------
